@@ -1,9 +1,11 @@
-## Send SMS from internal network via ZTE model MF283+
+## Send SMS from internal network via ZTE modem MF283+
 
 # Requirements
 
-- python3
-- requests
+- MF283+ modem permitted to send SMS
+- Computer attached to internal netwok with
+  -- python3
+  -- requests
 
 # Usage
 
