@@ -1,13 +1,40 @@
 #!/usr/bin/env python3
+
+
 import sys
+import base64
 import codecs
 import time
 import requests
 
 from encodings import normalize_encoding
 
+import subprocess
+
+ROUTER_IP = '192.168.0.1'
+URL = None
+HEADERS = None
+
+PASSWD = b'admin'
+
 
 _cache = {}
+
+
+def setup_router():
+    global ROUTER_IP, URL, HEADERS
+
+    code, gateway_ips = subprocess.getstatusoutput("ip r | sed -n 's/default via \\([^ ]*\\) .*/\\1/p'")
+    if code == 0:
+        lines = gateway_ips.splitlines()
+        if lines and lines[0]:
+            ROUTER_IP = lines[0]
+
+    URL = f'http://{ROUTER_IP}/goform/goform_set_cmd_process'
+    HEADERS = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                              'X-Requested-With': 'XMLHttpRequest',
+                              'Accept': 'application/json, text/javascript, */*; q=0.01',
+                              f'Referer': f'http://{ROUTER_IP}/index.html'}
 
 
 def decode_gsm7(txt, errors):
@@ -112,13 +139,6 @@ def search_function(encoding):
 codecs.register(search_function)
 
 
-URL = 'http://192.168.0.1/goform/goform_set_cmd_process'
-HEADERS = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                              'X-Requested-With': 'XMLHttpRequest',
-                              'Accept': 'application/json, text/javascript, */*; q=0.01',
-                              'Referer': 'http://192.168.0.1/index.html'}
-
-
 def two_dig(c):
     res = hex(c)[2:].upper()
     if len(res) == 1:
@@ -151,52 +171,58 @@ def hilfe():
     sys.exit(2)
 
 
-if len(sys.argv) != 3:
-    hilfe()
+def main():
+    if len(sys.argv) != 3:
+        hilfe()
 
-if not is_phone_number(sys.argv[1]):
-    print("Invalid phone number: %s" % sys.argv[1])
-    hilfe()
+    if not is_phone_number(sys.argv[1]):
+        print("Invalid phone number: %s" % sys.argv[1])
+        hilfe()
 
+    setup_router()
 
-# LOGIN
-resp = requests.post(URL, headers=HEADERS,  data={'isTest': 'false', 'goformId': 'LOGIN', 'password': 'YWRtaW4='})
-if resp.status_code == 200:
-    output = resp.json()
-    if str(output['result']).upper() in ['0', 'OK', 'SUCCESS']:
+    print(f"Login {URL}")
 
-        print("Login succeeded")
-        number = sys.argv[1]
+    passwd = base64.encodebytes(PASSWD).decode().strip()
+    resp = requests.post(URL, headers=HEADERS,  data={'isTest': 'false', 'goformId': 'LOGIN', 'password': passwd})
+    if resp.status_code == 200:
+        output = resp.json()
+        if str(output['result']).upper() in ['0', 'OK', 'SUCCESS']:
 
-        body = sys.argv[2]
+            print("Login succeeded")
+            number = sys.argv[1]
 
-        try:
-            # max=765
-            body = encode_sms_body(body[:760], 'gsm7')
-            encoding = 'GSM7_default'
-        except UnicodeEncodeError:
-            # max=335
-            body = encode_sms_body(body[:330], 'utf16')
-            encoding = 'UNICODE'
+            body = sys.argv[2]
 
-        # AAAAA  kukuleczka ZZZZZ
-        # MessageBody='0041004100410041004100200020006B0075006B0075006C00650063007A006B00610020005A005A005A005A005A'
+            try:
+                # max=765
+                body = encode_sms_body(body[:760], 'gsm7')
+                encoding = 'GSM7_default'
+            except UnicodeEncodeError:
+                # max=335
+                body = encode_sms_body(body[:330], 'utf16')
+                encoding = 'UNICODE'
 
-        print("[%s] => %s" % (encoding, body))
+            print("[%s] => %s" % (encoding, body))
 
-        sms_time = time.strftime('%Y;%m;%d;%H;%M;%S;+2')[2:]
+            sms_time = time.strftime('%Y;%m;%d;%H;%M;%S;+2')[2:]
 
-        # encode_type=UNICODE | GSM7_default
-        # [UNICODE] łóść ŻÓL! => 0142 00F3 015B 0107 0020 017B 00D3 004C 0021
-        # [GSM7]
-        data = {'isTest': 'false',
-                'goformId': 'SEND_SMS',
-                'notCallback': 'true',
-                'Number': str(number),
-                'sms_time': sms_time,
-                'MessageBody': body,
-                'ID': '-1',
-                'encode_type': 'UNICODE'}
-        resp = requests.post(URL, headers=HEADERS, data=data)
-        print(resp.status_code)
-        print(resp.json())
+            # encode_type=UNICODE | GSM7_default
+            # [UNICODE] łóść ŻÓL! => 0142 00F3 015B 0107 0020 017B 00D3 004C 0021
+            # [GSM7]
+            data = {'isTest': 'false',
+                    'goformId': 'SEND_SMS',
+                    'notCallback': 'true',
+                    'Number': str(number),
+                    'sms_time': sms_time,
+                    'MessageBody': body,
+                    'ID': '-1',
+                    'encode_type': 'UNICODE'}
+            resp = requests.post(URL, headers=HEADERS, data=data)
+
+    print(resp.status_code)
+    print(resp.json())
+
+if __name__ == "__main__":
+    main()
+
