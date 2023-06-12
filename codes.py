@@ -94,3 +94,38 @@ def decode_message(string, ignore_wrap):
 
     import re
     return re.sub(r'([A-Fa-f0-9]{1,4})', replace, string)
+
+
+def left_insert(value, length, placeholder):
+    value_str = str(value)
+    len_value = len(value_str)
+    while len_value < length:
+        value_str = placeholder + value_str
+        len_value += 1
+    return value_str
+
+def parse_time(date):
+    if "+" in date:
+        date = date[:date.rfind("+")]
+
+    if "," in date:
+        date_arr = date.split(",")
+    else:
+        date_arr = date.split(";")
+
+    if len(date_arr) == 0:
+        return ""
+    else:
+
+        if len(date_arr[0]) == 2:
+            date_arr[0] = '20' + date_arr[0]
+
+        time = (
+                date_arr[0] + "-" +
+                date_arr[1] + "-" +
+                date_arr[2] + " " +
+                left_insert(date_arr[3], 2, '0') + ":" +
+                left_insert(date_arr[4], 2, '0') + ":" +
+                left_insert(date_arr[5], 2, '0')
+        )
+        return time
