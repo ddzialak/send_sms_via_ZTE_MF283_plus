@@ -1,5 +1,6 @@
 import base64
 import logging
+import os
 import subprocess
 import time
 
@@ -21,6 +22,8 @@ known_numbers = {}
 
 
 def load_known_numbers():
+    if not os.path.isfile('numbers.txt'):
+        return
     with open('numbers.txt') as fh:
         lines = fh.readlines()
 
@@ -119,7 +122,7 @@ def login():
     raise SystemExit(7)
 
 
-def send_sms(number, body):
+def send_sms(number, body, check_response=True):
     raw_headers = f'''
         Content-Type: application/x-www-form-urlencoded; charset=UTF-8
         X-Requested-With: XMLHttpRequest
@@ -135,9 +138,12 @@ def send_sms(number, body):
             'MessageBody': encode_sms_body(body, 'UNICODE'),
             'ID': '-1',
             'encode_type': 'UNICODE'}
+    logger.info(f"Sending to {number} message: {body}")
     resp = send_request('post', '/goform/goform_set_cmd_process', raw_headers, data=data)
-    print(resp.status_code)
-    print(resp.json())
+    result = resp.json()
+    logger.info(result)
+    if check_response and result.get('result').lower() != 'success':
+        raise ValueError("Sending message failed: {result}")
 
 
 def check_received_sms(ts=None, mem_store=1):
