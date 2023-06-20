@@ -1,3 +1,5 @@
+import re
+
 GSM7_Table = [
     "000A", "000C", "000D", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0027", "0028",
     "0029", "002A", "002B", "002C", "002D", "002E", "002F", "0030", "0031", "0032", "0033", "0034", "0035", "0036",
@@ -48,6 +50,7 @@ def get_encode_type(str_message):
 
     return {"encodeType": encode_type, "extendLen": gsm7_extend_char_len}
 
+
 def encode_message(text_string):
     haut = 0
     result = ''
@@ -92,7 +95,6 @@ def decode_message(string, ignore_wrap):
         else:
             return ''
 
-    import re
     return re.sub(r'([A-Fa-f0-9]{1,4})', replace, string)
 
 
@@ -103,6 +105,7 @@ def left_insert(value, length, placeholder):
         value_str = placeholder + value_str
         len_value += 1
     return value_str
+
 
 def parse_time(date):
     if "+" in date:
