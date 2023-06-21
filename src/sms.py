@@ -16,7 +16,7 @@ def parse_args(args):
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-c', '--check', action='store_true', help="Check inbox")
-    parser.add_argument('-d', '--delete', action='store_true', help='Delete messages')
+    parser.add_argument('--delete-all', action='store_true', help='Delete messages')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose info')
     parser.add_argument('--rmid', type=int, help='Remove single message')
     parser.add_argument('--all', action='store_true', help="Show all inbox messages")
@@ -40,6 +40,10 @@ def handle_received_message(msg):
     elif content.lower() == 'netoff':
         resp = set_net_state(False)
         send_sms(number, str(resp))
+    else:
+        redirect_to = to_number('default')
+        if redirect_to not in [number, 'default']:
+            send_sms(redirect_to, f"[{msg_id} FROM: {number}\n{content}")
 
 
 state_desc = {
@@ -70,7 +74,7 @@ def main():
             style = term.YELLOW if "<" in state  else term.NORMAL
             bright = term.BRIGHT if "=" in state else ''
             logger.info(f'%5s %-12s %4s %s {style}{bright}%s{term.RESET_ALL}' % (msg.get('id'), date, number, state, content))
-            if parser.delete:
+            if parser.delete_all:
                 delete_sms(msg.get('id'))
 
     if parser.send:
