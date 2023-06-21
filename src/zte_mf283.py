@@ -1,7 +1,6 @@
 import base64
 import logging
 import os
-import subprocess
 import time
 
 import requests
@@ -9,7 +8,6 @@ import requests
 from codes import decode_message
 from codes import encode_message
 from codes import parse_time
-
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +20,9 @@ known_numbers = {}
 
 
 def load_known_numbers():
-    if not os.path.isfile('numbers.txt'):
+    if not os.path.isfile('../numbers.txt'):
         return
-    with open('numbers.txt') as fh:
+    with open('../numbers.txt') as fh:
         lines = fh.readlines()
 
     for line in lines:
@@ -54,34 +52,6 @@ def to_number(number_or_name):
     if is_phone_number(number_or_name):
         return number_or_name
     return known_numbers.get(number_or_name, number_or_name)
-
-
-
-def setup_cli():
-    import sys
-    level = logging.DEBUG if '-v' in sys.argv or '--verbose' in sys.argv else logging.INFO
-    logging.basicConfig(level=level)
-    setup_router()
-    load_known_numbers()
-
-def setup_router():
-    global ROUTER_IP
-
-    if ROUTER_IP:
-        return
-
-    logger.info("Setup/search device")
-    code, gateway_ips = subprocess.getstatusoutput("ip r | sed -n 's/default via \\([^ ]*\\) .*/\\1/p'")
-    if code == 0:
-        for line in gateway_ips.splitlines():
-            logger.debug(f'Trying %s', line)
-            candidate = line
-            resp = requests.get(f'http://{candidate}/index.html', timeout=3, verify=False, allow_redirects=True)
-            if 'ZTE_MF283_QSG_v1.pdf' in resp.text:
-                ROUTER_IP = line
-
-    if not ROUTER_IP:
-        raise ValueError(f"Can not find valid device")
 
 
 def encode_sms_body(data, codec):
@@ -138,7 +108,8 @@ def send_sms(number, body, check_response=True):
             'MessageBody': encode_sms_body(body, 'UNICODE'),
             'ID': '-1',
             'encode_type': 'UNICODE'}
-    logger.info(f"Sending to {number} message: {body}")
+    name = to_name(number)
+    logger.info(f"Sending to {name} [{number}] message: {body}")
     resp = send_request('post', '/goform/goform_set_cmd_process', raw_headers, data=data)
     result = resp.json()
     logger.info(result)

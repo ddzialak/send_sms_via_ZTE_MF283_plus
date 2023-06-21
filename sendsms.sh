@@ -1,6 +1,8 @@
 #/bin/bash
 
+cd $(dirname "$0")
+
 receiver=$1
 shift
 
-python3 sms.py --send "$receiver"  "$*"
+python3 src/sms.py --send "$receiver"  "$*"

@@ -3,8 +3,11 @@ import argparse
 import logging
 import sys
 
-from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, is_phone_number, setup_cli, \
-    known_numbers, to_name, delete_sms, to_number
+from utils import setup_cli
+from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, is_phone_number, known_numbers, \
+    to_name, delete_sms, to_number
+
+import term
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +18,9 @@ def parse_args(args):
     parser.add_argument('-c', '--check', action='store_true', help="Check inbox")
     parser.add_argument('-d', '--delete', action='store_true', help='Delete messages')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose info')
+    parser.add_argument('--rmid', type=int, help='Remove single message')
     parser.add_argument('--all', action='store_true', help="Show all inbox messages")
     parser.add_argument('--keep-unread', action='store_true', help="Show inbox messages but do not mark them as read")
-
-
     parser.add_argument('--send', nargs=2, help="Send message, should be followed by receiver's number and text to send")
     return parser.parse_args(args)
 
@@ -35,10 +37,16 @@ def handle_received_message(msg):
     if content.lower() == 'neton':
         resp = set_net_state(True)
         send_sms(number, str(resp))
-
-    if content.lower() == 'netoff':
+    elif content.lower() == 'netoff':
         resp = set_net_state(False)
         send_sms(number, str(resp))
+
+
+state_desc = {
+        '0': ' -> ',
+        '1': ' => ',
+        '2': ' <- ',
+}
 
 
 def main():
@@ -57,10 +65,13 @@ def main():
             number = to_name(msg.get('number'))
             content = msg.get('content')
             date = msg.get('date')
-            logger.info('%5s %s %-12s %s' % (msg.get('id'), date, number, content))
+            tag = msg.get('tag')
+            state = state_desc.get(str(tag), '???')
+            style = term.YELLOW if "<" in state  else term.NORMAL
+            bright = term.BRIGHT if "=" in state else ''
+            logger.info(f'%5s %-12s %4s %s {style}{bright}%s{term.RESET_ALL}' % (msg.get('id'), date, number, state, content))
             if parser.delete:
                 delete_sms(msg.get('id'))
-        return 0
 
     if parser.send:
         receiver = parser.send[0]
@@ -70,6 +81,11 @@ def main():
             logger.error("Invalid phone number: %s" % number)
         login()
         send_sms(number, text)
+
+    if parser.rmid:
+        login()
+        logger.info("Delete message %s", parser.rmid)
+        delete_sms(parser.rmid)
 
 
 if __name__ == "__main__":
