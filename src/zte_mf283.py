@@ -1,6 +1,5 @@
 import base64
 import logging
-import os
 import time
 
 import requests
@@ -8,6 +7,7 @@ import requests
 from codes import decode_message
 from codes import encode_message
 from codes import parse_time
+from utils import to_name
 
 logger = logging.getLogger(__name__)
 
@@ -16,48 +16,11 @@ ROUTER_IP = ''
 
 _cache = {}
 
-known_numbers = {}
 
-module_path = os.path.abspath(__file__)
-
-
-def load_known_numbers():
-    file_with_numbers = os.path.join(os.path.dirname(os.path.dirname(module_path)), 'numbers.txt')
-    if not os.path.isfile(file_with_numbers):
-        logger.debug("Missing file with numbers: %s", file_with_numbers)
-        return
-    with open(file_with_numbers) as fh:
-        lines = fh.readlines()
-
-    for line in lines:
-        if ':' in line:
-            number, user = line.split(':', 1)
-            number = number.strip()
-            user = user.lower().strip()
-            if is_phone_number(number) and not is_phone_number(user):
-                known_numbers[user] = number
-                known_numbers[number] = user
-                logger.debug(f"Loaded {user} number: {number}")
-            else:
-                logger.debug("Skip line: %s (%s is not number or %s is a valid number)", line, number, user)
-
-
-def to_name(number_or_name):
-    number_or_name = number_or_name.strip()
-    if number_or_name.startswith('+48'):
-        number_or_name = number_or_name[3:]
-    number_or_name = number_or_name.strip()
-    if not is_phone_number(number_or_name):
-        return number_or_name
-    return known_numbers.get(number_or_name, number_or_name)
-
-
-def to_number(number_or_name):
-    if number_or_name.startswith('+48'):
-        number_or_name = number_or_name[3:]
-    if is_phone_number(number_or_name):
-        return number_or_name
-    return known_numbers.get(number_or_name, number_or_name)
+class Tag:
+    READ = "0"
+    UNREAD = "1"
+    SENT = "2"
 
 
 def encode_sms_body(data, codec):
@@ -70,13 +33,9 @@ def decode_sms_body(data):
     return decode_message(data, True)
 
 
-def is_phone_number(ph):
-    return len(ph) == 9 and ph.isdigit()
-
-
 def login():
     if not ROUTER_IP:
-        raise ValueError("Sorry!")
+        raise ValueError("Sorry! Missing router address.")
 
     passwd = base64.encodebytes(PASSWD).decode().strip()
     raw_headers = f'''
@@ -92,7 +51,7 @@ def login():
         if str(output['result']).upper() in ['0', 'OK', 'SUCCESS']:
             logger.info("Login succeeded")
             return True
-        logger.log(output)
+        logger.info(output)
     logger.error("Login FAILED (see log above)")
     logger.error(f"Response: {resp}")
     raise SystemExit(7)
