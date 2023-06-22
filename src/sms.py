@@ -31,16 +31,19 @@ def parse_args(args):
 def handle_received_message(msg):
     msg_id = msg.get('id')
     number = msg.get('number')
-    if number not in known_numbers:
-        return
     if number.startswith('+48'):
         number = number[3:]
+    if number not in known_numbers:
+        return
+
     content = msg.get('content')
 
-    if content.lower() == 'neton':
+    if content.lower() == 'connect':
+        logger.info("connecting...")
         resp = set_net_state(True)
         send_sms(number, str(resp))
-    elif content.lower() == 'netoff':
+    elif content.lower() == 'disconnect':
+        logger.info("disconnecting...")
         resp = set_net_state(False)
         send_sms(number, str(resp))
     else:
@@ -67,8 +70,8 @@ def main():
         for _id, msg in sorted(m1.items(), key=lambda t: t[1].get('date')):
             logger.debug(msg)
             if msg.get('tag') == '1' and not parser.keep_unread:
-                set_sms_read(msg.get('id'))
                 handle_received_message(msg)
+                set_sms_read(msg.get('id'))
             number = to_name(msg.get('number'))
             content = msg.get('content')
             date = msg.get('date')
