@@ -105,7 +105,7 @@ def load_known_numbers():
             number = number.strip()
             if is_phone_number(number):
                 known_numbers[number] = user
-                known_numbers.setdefault(f'user: {user}', []).append(number)
+                known_numbers[f'user: {user}'] = number
             else:
                 logger.debug("Skip %s as it's not valid phone number (user %s in line: %s)", number, user, line)
             logger.debug(f"Loaded {user} number: {number}")

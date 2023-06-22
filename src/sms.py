@@ -89,8 +89,9 @@ def main():
         number = to_number(receiver)
         if not is_phone_number(number):
             logger.error("Invalid phone number: %s" % number)
-        login()
-        send_sms(number, text)
+        else:
+            login()
+            send_sms(number, text)
 
     if parser.rmid:
         login()
