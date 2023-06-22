@@ -20,7 +20,10 @@ def parse_args(args):
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose info')
     parser.add_argument('--rmid', type=int, help='Remove single message')
     parser.add_argument('--all', action='store_true', help="Show all inbox messages")
-    parser.add_argument('--keep-unread', action='store_true', help="Show inbox messages but do not mark them as read")
+    parser.add_argument(
+            '--keep-unread', action='store_true', help="Show inbox messages but keep them unread and do not"
+            " invoke actions for new messages like forwarding message or connecting/disconnecting router."
+    )
     parser.add_argument('--send', nargs=2, help="Send message, should be followed by receiver's number and text to send")
     return parser.parse_args(args)
 
@@ -63,7 +66,7 @@ def main():
         m1.update(m2)
         for _id, msg in sorted(m1.items(), key=lambda t: t[1].get('date')):
             logger.debug(msg)
-            if msg.get('tag') == '1':
+            if msg.get('tag') == '1' and not parser.keep_unread:
                 set_sms_read(msg.get('id'))
                 handle_received_message(msg)
             number = to_name(msg.get('number'))

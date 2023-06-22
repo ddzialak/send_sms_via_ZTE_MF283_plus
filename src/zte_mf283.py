@@ -18,11 +18,15 @@ _cache = {}
 
 known_numbers = {}
 
+module_path = os.path.abspath(__file__)
+
 
 def load_known_numbers():
-    if not os.path.isfile('../numbers.txt'):
+    file_with_numbers = os.path.join(os.path.dirname(os.path.dirname(module_path)), 'numbers.txt')
+    if not os.path.isfile(file_with_numbers):
+        logger.debug("Missing file with numbers: %s", file_with_numbers)
         return
-    with open('../numbers.txt') as fh:
+    with open(file_with_numbers) as fh:
         lines = fh.readlines()
 
     for line in lines:
@@ -39,8 +43,10 @@ def load_known_numbers():
 
 
 def to_name(number_or_name):
+    number_or_name = number_or_name.strip()
     if number_or_name.startswith('+48'):
         number_or_name = number_or_name[3:]
+    number_or_name = number_or_name.strip()
     if not is_phone_number(number_or_name):
         return number_or_name
     return known_numbers.get(number_or_name, number_or_name)
