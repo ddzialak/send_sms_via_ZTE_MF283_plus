@@ -7,7 +7,7 @@ import term
 from utils import known_numbers, to_name, to_number, is_phone_number
 from utils import setup_cli
 from zte_mf283 import Tag
-from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, delete_sms
+from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, delete_sms,enable_dhcp_server, disable_dhcp_server
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +37,22 @@ def handle_received_message(msg):
     if number not in known_numbers:
         return
 
-    content = msg.get('content')
+    content = msg.get('content').lower()
 
-    if content.lower() == 'connect':
+    if content == 'connect':
         logger.info("connecting...")
         resp = set_net_state(True)
         send_sms(number, str(resp))
-    elif content.lower() == 'disconnect':
+    elif content == 'disconnect':
         logger.info("disconnecting...")
         resp = set_net_state(False)
         send_sms(number, str(resp))
+    elif content == 'dhcpon':
+        logger.info("Enable dhcp")
+        enable_dhcp_server()
+    elif content == 'dhcpoff':
+        logger.info("Disable dhcp")
+        disable_dhcp_server()
     else:
         redirect_to = to_number('default')
         if redirect_to not in [number, 'default']:
