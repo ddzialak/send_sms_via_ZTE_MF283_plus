@@ -25,13 +25,20 @@ def is_phone_number(ph):
     return len(ph) == 9 and ph.isdigit()
 
 
-def load_config():
+def load_config(filename='mf283.ini', without=None):
     config = configparser.ConfigParser()
 
     for cfg_dir in config_dirs:
-        candidate = os.path.join(cfg_dir, 'mf283.ini')
+        candidate = os.path.join(cfg_dir, filename)
         if os.path.isfile(candidate):
             config.read(candidate)
+
+    extra_cfg_file = config.get('default', 'import', fallback='mf283-user.ini')
+    if extra_cfg_file:
+        without = without or set()
+        without.add(filename)
+        if extra_cfg_file not in without:
+            return load_config(extra_cfg_file, without)
 
     return config
 
