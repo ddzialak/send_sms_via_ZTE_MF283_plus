@@ -49,6 +49,7 @@ def setup_cli(verbose=False):
     config = load_config()
     logging.basicConfig(level=level, format=fmt)
     setup_router(config.get('default', 'router_ip', fallback='auto'))
+    setup_passwd(config.get('default', 'password', fallback=None))
     load_known_numbers()
 
 
@@ -56,6 +57,12 @@ def _check_addr(router_ip):
     logger.debug(f'Trying %s', router_ip)
     resp = requests.get(f'http://{router_ip}/index.html', timeout=3, verify=False, allow_redirects=True)
     return 'ZTE_MF283_QSG_v1.pdf' in resp.text
+
+
+def setup_passwd(password):
+    if password:
+        import zte_mf283
+        zte_mf283.PASSWD = password.encode()
 
 
 def setup_router(router_ip):
