@@ -7,7 +7,7 @@ import term
 from utils import known_numbers, to_name, to_number, is_phone_number
 from utils import setup_cli
 from zte_mf283 import Tag
-from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, delete_sms,enable_dhcp_server, disable_dhcp_server
+from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, delete_sms, enable_dhcp_server, disable_dhcp_server
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,11 @@ def handle_received_message(msg):
     if content == 'connect':
         logger.info("connecting...")
         resp = set_net_state(True)
-        send_sms(number, str(resp))
+        send_sms(number, f"Response to connect request: {resp}")
     elif content == 'disconnect':
         logger.info("disconnecting...")
         resp = set_net_state(False)
-        send_sms(number, str(resp))
+        send_sms(number, f"Response to disconnect request: {resp}")
     elif content == 'dhcpon':
         logger.info("Enable dhcp")
         enable_dhcp_server()
@@ -93,7 +93,9 @@ def main():
         receiver = parser.send[0]
         text = parser.send[1]
         number = to_number(receiver)
-        if not is_phone_number(number):
+        if not number:
+            logger.error(f"Unrecognized receiver: {receiver}")
+        elif not is_phone_number(number):
             logger.error("Invalid phone number: %s" % number)
         else:
             login()

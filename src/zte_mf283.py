@@ -45,16 +45,15 @@ def login():
         Referer: http://{ROUTER_IP}/index.html
     '''
     data = {'isTest': 'false', 'goformId': 'LOGIN', 'password': passwd}
-    resp = send_request('post', '/goform/goform_set_cmd_process', raw_headers, data=data)
-    if resp.status_code == 200:
-        output = resp.json()
-        if str(output['result']).upper() in ['0', 'OK', 'SUCCESS']:
-            logger.info("Login succeeded")
+
+    def check_error(resp):
+        if resp.status_code != 200:
             return True
-        logger.info(output)
-    logger.error("Login FAILED (see log above)")
-    logger.error(f"Response: {resp}")
-    raise SystemExit(7)
+        output = resp.json()
+        return str(output['result']).upper() not in ['0', 'OK', 'SUCCESS']
+
+    resp = send_request('post', '/goform/goform_set_cmd_process', raw_headers, data=data, has_response_error_func=check_error)
+    logger.info("Login succeeded")
 
 
 def send_sms(number, body, check_response=True):
@@ -138,14 +137,20 @@ def raw_data_to_headers(raw_headers):
             headers[key] = value.strip()
     return headers
 
+def has_response_HTTP_error(resp):
+    return resp.status_code // 100 != 2
 
-def send_request(method, path, raw_headers, raise_on_error=True, **kwargs):
+
+def send_request(method, path, raw_headers, raise_on_error=True, has_response_error_func=has_response_HTTP_error, **kwargs):
     req_headers = raw_data_to_headers(raw_headers)
     resp = requests.request(method, get_url(path), headers=req_headers, **kwargs)
-    if resp.status_code // 100 != 2:
+    if has_response_error_func(resp):
+        logger.info(" = = =  R E Q U E S T   F A I L E D  = = =")
         logger.info(f"Request {method} {path}")
         logger.info(f"Headers: {req_headers}")
-        logger.info("FAILED")
+        for k, v in kwargs.items():
+            logger.debug('%s=%s', k, v)
+        logger.info(" = = =   R E S P O N S E   = = =")
         logger.info(resp.headers)
         logger.info('')
         logger.info(resp.text)

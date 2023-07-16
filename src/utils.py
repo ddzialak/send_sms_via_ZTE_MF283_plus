@@ -22,23 +22,28 @@ config_dirs = ['/etc', module_dir, './']
 
 
 def is_phone_number(ph):
+    ph = str(ph)
     return len(ph) == 9 and ph.isdigit()
 
 
-def load_config(filename='mf283.ini', without=None):
-    config = configparser.ConfigParser()
+def load_config(filename='mf283.ini', without=None, config=None):
+    config = config or configparser.ConfigParser()
+    without = without or set()
+    num_loaded_files = 0
 
     for cfg_dir in config_dirs:
-        candidate = os.path.join(cfg_dir, filename)
-        if os.path.isfile(candidate):
+        candidate = os.path.abspath(os.path.join(cfg_dir, filename))
+        if candidate not in without and os.path.isfile(candidate):
+            without.add(candidate)
+            if '-v' in sys.argv or '--verbose' in sys.argv:
+               print("Load config: %s" % candidate)
             config.read(candidate)
+            num_loaded_files += 1
 
-    extra_cfg_file = config.get('default', 'import', fallback='mf283-user.ini')
-    if extra_cfg_file:
-        without = without or set()
-        without.add(filename)
-        if extra_cfg_file not in without:
-            return load_config(extra_cfg_file, without)
+    if num_loaded_files:
+        extra_cfg_file = config.get('default', 'import', fallback='mf283-user.ini')
+        if extra_cfg_file:
+            load_config(extra_cfg_file, without, config)
 
     return config
 
