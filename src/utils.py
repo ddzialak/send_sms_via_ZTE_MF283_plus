@@ -101,7 +101,6 @@ def setup_router(router_ip):
         raise ValueError(f"Missing device or not configured properly")
 
 
-
 def load_known_numbers():
     file_with_numbers = os.path.join(os.path.dirname(os.path.dirname(module_path)), 'numbers.txt')
     if not os.path.isfile(file_with_numbers):
