@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
+
 import argparse
+import json
 import logging
+import subprocess
 import sys
+import time
 
 import term
 from utils import known_numbers, to_name, to_number, is_phone_number
 from utils import setup_cli
 from zte_mf283 import Tag
-from zte_mf283 import send_sms, set_net_state, check_received_sms, login, set_sms_read, delete_sms, enable_dhcp_server, disable_dhcp_server, get_status
+from zte_mf283 import send_sms, set_net_state, check_received_sms, login, \
+        set_sms_read, delete_sms, enable_dhcp_server, disable_dhcp_server, get_status
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +33,20 @@ def parse_args(args):
     parser.add_argument('--connect', action='store_true', help="Request network connection.")
     parser.add_argument('--disconnect', action='store_true', help="Request disconnection.")
     parser.add_argument('--get-status', action='store_true', help="Request for status.")
+    parser.add_argument('--interval', type=int, default=10, help='Interval between commands (see --repeat)')
+    parser.add_argument('--repeat', type=int, default=1, help='Number of repeatitions')
     return parser.parse_args(args)
 
 
+def get_temp_info(json=False):
+    try:
+        return subprocess.check_output(['timeout', '20', 'sensors', 'sht21-i2c-1-40']).decode().strip()
+    except Exception as ex:
+        return f"get temp error: {ex}"
+
+
 STATUS_KEYS = {'signalbar', 'network_type', 'sms_unread_num', 'simcard_roam', 'network_provider', 'ppp_status'}
+
 
 def handle_received_message(msg):
     msg_id = msg.get('id')
@@ -66,7 +81,12 @@ def handle_received_message(msg):
             send_sms(number, f'ERR: {ex}')
         else:
             result = {k: v for (k,v) in result.items() if k in STATUS_KEYS}
-            send_sms(number, f'Status: {result}')
+            result_str = json.dumps(result, sort_keys=True, indent=2)
+            send_sms(number, f'Status: {result_str}')
+    elif content in ['temp', 'get_temp']:
+        send_sms(number, get_temp_info());
+    elif content.startswith('monit'):
+        send_sms(number, 'not supported yet')
     else:
         forward_to = to_number('default')
         if not forward_to:
@@ -74,12 +94,11 @@ def handle_received_message(msg):
         elif forward_to == number:
             logger.info(f"Do not forward message from {number} (it is the same number as 'default' entry)")
         else:
-            send_sms(forward_to, f"[{msg_id}] FROM: {number}\n{content}")
+            msg_orig = msg.get('content')
+            send_sms(forward_to, f"[{msg_id}] FROM: {number}\n{msg_orig}")
 
 
-def main():
-    parser = parse_args(sys.argv[1:])
-    setup_cli(verbose=parser.verbose)
+def execute_request(parser):
     if parser.check or parser.all or parser.keep_unread:
         login()
         m1 = check_received_sms(sys.argv[2] if len(sys.argv) == 3 else None, mem_store=0)
@@ -95,7 +114,7 @@ def main():
             state = {Tag.READ: ' -> ', Tag.UNREAD: ' => ', Tag.SENT: ' <- '}.get(str(tag), '???')
             style = term.YELLOW if tag in [Tag.READ, Tag.UNREAD] else term.NORMAL
             bright = term.BRIGHT if tag == Tag.UNREAD in state else ''
-            logger.info(f'%5s %-12s %4s %s {style}{bright}%r{term.RESET_ALL}' % (msg.get('id'), date, number, state, content))
+            print(f'%5s %-12s %4s %s {style}{bright}%r{term.RESET_ALL}' % (msg.get('id'), date, number, state, content))
 
             if tag == '1' and not parser.keep_unread:
                 try:
@@ -132,8 +151,29 @@ def main():
         logger.info(f"Disconnection request result: {resp}")
     if parser.get_status:
         resp = get_status()
-        logger.info(resp)
+        print(json.dumps(resp, sort_keys=True, indent=2))
+
+
+def main():
+    parser = parse_args(sys.argv[1:])
+    setup_cli(verbose=parser.verbose)
+
+    repeat_num = parser.repeat
+    while repeat_num != 0:
+        execute_request(parser)
+        repeat_num -= 1
+        if repeat_num == 0:
+            break
+        sys.stdout.write("sleeping...")
+        sys.stdout.flush()
+        time.sleep(parser.interval)
+        sys.stdout.write("\n")
+
 
 
 if __name__ == "__main__":
-    main()
+    try:
+       main()
+    except KeyboardInterrupt:
+        print("Bye!")
+
