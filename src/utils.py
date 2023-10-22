@@ -20,13 +20,16 @@ module_dir = os.path.dirname(os.path.dirname(module_path))
 
 config_dirs = ['/etc', module_dir, './']
 
+sms_cmds = {
+}
+
 
 def is_phone_number(ph):
     ph = str(ph)
     return len(ph) == 9 and ph.isdigit()
 
 
-def load_config(filename='mf283.ini', without=None, config=None):
+def load_config(filename='mf283.ini', without=None, config=None) -> configparser.ConfigParser:
     config = config or configparser.ConfigParser()
     without = without or set()
     num_loaded_files = 0
@@ -48,6 +51,44 @@ def load_config(filename='mf283.ini', without=None, config=None):
     return config
 
 
+def exec_cmd(cmd, timeout=10):
+    try:
+        completed_proc = subprocess.run(cmd, shell=True, timeout=timeout, capture_output=True)
+        result = []
+        if completed_proc.stderr:
+            result.append(completed_proc.stderr.strip().decode())
+        if completed_proc.stdout:
+            result.append(completed_proc.stdout.strip().decode())
+        if completed_proc.returncode:
+            result.append(f"ERR: {completed_proc.returncode}")
+        return '\n'.join(result)
+    except Exception as ex:
+        return f"cmd error: {ex}"
+
+
+def get_callback(fn, *args, **kwargs):
+    return lambda: fn(*args, **kwargs)
+
+
+def load_cmds(config: configparser.ConfigParser):
+    cmd_prefix = 'command:'
+    for section in config.sections():
+        if not section.startswith(cmd_prefix):
+            continue
+        key = section[len(cmd_prefix):].strip()
+        cmd = config.get(section, 'exec', fallback='').strip()
+        if key and cmd:
+            alias = config.get(section, 'alias', fallback='').strip()
+            timeout = config.getint(section, 'timeout', fallback=10)
+
+            callback = get_callback(exec_cmd, cmd,  timeout=timeout)
+
+            logger.debug(f"Register cmd {key} {alias=} => {cmd}")
+            sms_cmds[key] = callback
+            if alias:
+                sms_cmds[alias] = callback
+
+
 def setup_cli(verbose=False):
     if sys.stdout.isatty():
         terminal_formats_enabled()
@@ -58,11 +99,12 @@ def setup_cli(verbose=False):
         level = logging.INFO
         fmt = OUTPUT_FMT
 
-    config = load_config()
+    config: configparser.ConfigParser = load_config()
     logging.basicConfig(level=level, format=fmt)
     setup_router(config.get('default', 'router_ip', fallback='auto'))
     setup_passwd(config.get('default', 'password', fallback=None))
     load_known_numbers()
+    load_cmds(config)
 
 
 def _check_addr(router_ip):

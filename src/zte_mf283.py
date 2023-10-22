@@ -52,11 +52,24 @@ def login():
         output = resp.json()
         return str(output['result']).upper() not in ['0', 'OK', 'SUCCESS']
 
-    resp = send_request('post', '/goform/goform_set_cmd_process', raw_headers, data=data, has_response_error_func=check_error)
-    logger.info("Login succeeded")
+    send_request('post', '/goform/goform_set_cmd_process', raw_headers, data=data, has_response_error_func=check_error)
+    logger.debug("Login succeeded")
 
 
-def send_sms(number, body, check_response=True):
+def send_sms(number, body, check_response=True, allow_split=True):
+    if len(body) > 330:
+        if allow_split:
+            part = 320
+            sms1 = f"{body[:part]}(..)"
+            send_sms(number, sms1, check_response=check_response, allow_split=False)
+            time.sleep(2)
+            sms2 = '(..)' + (body[part:])[:-part]
+            return send_sms(number, sms2, check_response=check_response, allow_split=False)
+        else:
+            body = body[:300]
+
+    sms_body = encode_sms_body(body, 'UNICODE')
+
     raw_headers = f'''
         Content-Type: application/x-www-form-urlencoded; charset=UTF-8
         X-Requested-With: XMLHttpRequest
@@ -69,7 +82,7 @@ def send_sms(number, body, check_response=True):
             'notCallback': 'true',
             'Number': str(number),
             'sms_time': sms_time,
-            'MessageBody': encode_sms_body(body, 'UNICODE'),
+            'MessageBody': sms_body,
             'ID': '-1',
             'encode_type': 'UNICODE'}
     name = to_name(number)

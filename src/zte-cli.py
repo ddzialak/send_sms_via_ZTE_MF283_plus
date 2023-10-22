@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
 import argparse
+import functools
 import json
 import logging
-import subprocess
 import sys
 import time
 
 import term
 from utils import known_numbers, to_name, to_number, is_phone_number
-from utils import setup_cli
+from utils import setup_cli, sms_cmds
 from zte_mf283 import Tag
 from zte_mf283 import send_sms, set_net_state, check_received_sms, login, \
-        set_sms_read, delete_sms, enable_dhcp_server, disable_dhcp_server, get_status
+    set_sms_read, delete_sms, enable_dhcp_server, disable_dhcp_server, get_status
 
 logger = logging.getLogger(__name__)
 
@@ -38,93 +38,93 @@ def parse_args(args):
     return parser.parse_args(args)
 
 
-def get_temp_info(json=False):
-    try:
-        return subprocess.check_output(['timeout', '20', 'sensors', 'sht21-i2c-1-40']).decode().strip()
-    except Exception as ex:
-        return f"get temp error: {ex}"
-
-
 STATUS_KEYS = {'signalbar', 'network_type', 'sms_unread_num', 'simcard_roam', 'network_provider', 'ppp_status'}
 
 
-def handle_received_message(msg):
-    msg_id = msg.get('id')
-    number = msg.get('number')
-    if number.startswith('+48'):
-        number = number[3:]
+def get_status_wrap():
+    logger.info("get status")
+    json_out = {k: v for (k, v) in get_status().items() if k in STATUS_KEYS}
+    return json.dumps(json_out, sort_keys=True, indent=2)
 
-    if number not in known_numbers:
+
+def register_sms_commands():
+    sms_cmds['connect'] = lambda: set_net_state(True)
+    sms_cmds['disconnect'] = lambda: set_net_state(False)
+    sms_cmds['dhcpon'] = enable_dhcp_server
+    sms_cmds['dhcpoff'] = disable_dhcp_server
+    sms_cmds['getstatus'] = get_status_wrap
+    sms_cmds['status'] = get_status_wrap
+    sms_cmds['checkstatus'] = get_status_wrap
+
+
+def exec_request_and_reply(sender, msg, content, forward_to):
+    for line in content.splitlines():
+        line = line.strip()
+        if line in sms_cmds:
+            try:
+                callback = sms_cmds.get(line)
+                result = callback()
+            except Exception as ex:
+                result = f'ERR: {ex}'
+            send_sms(sender, f"[{line}]\n{result}")
+        else:
+            keys_str = ', '.join(sms_cmds.keys())
+            send_sms(sender, f"Unrecognized: {line}, defined: {keys_str}")
+
+
+def handle_received_message(msg):
+    sender = msg.get('number')
+    if sender.startswith('+48'):
+        sender = sender[3:]
+
+    if sender not in known_numbers:
         return
 
-    content = msg.get('content').lower().strip()
-
-    if content == 'connect':
-        logger.info("connecting...")
-        resp = set_net_state(True)
-        send_sms(number, f"Response to connect request: {resp}")
-    elif content == 'disconnect':
-        logger.info("disconnecting...")
-        resp = set_net_state(False)
-        send_sms(number, f"Response to disconnect request: {resp}")
-    elif content == 'dhcpon':
-        logger.info("Enable dhcp")
-        enable_dhcp_server()
-    elif content == 'dhcpoff':
-        logger.info("Disable dhcp")
-        disable_dhcp_server()
-    elif content in ['check', 'get_status', 'status']:
-        logger.info("Check status...")
-        try:
-            result = get_status()
-        except Exception as ex:
-            send_sms(number, f'ERR: {ex}')
-        else:
-            result = {k: v for (k,v) in result.items() if k in STATUS_KEYS}
-            result_str = json.dumps(result, sort_keys=True, indent=2)
-            send_sms(number, f'Status: {result_str}')
-    elif content in ['temp', 'get_temp']:
-        send_sms(number, get_temp_info());
-    elif content.startswith('monit'):
-        send_sms(number, 'not supported yet')
+    content = msg.get('content').lower().replace('-', ' ').replace('_', ' ').strip()
+    forward_to = to_number('default')
+    if forward_to == sender:
+        exec_request_and_reply(sender, msg, content, forward_to)
     else:
-        forward_to = to_number('default')
         if not forward_to:
             logger.info("Do not forward message as recipient ('default' entry in numbers.txt) is not defined")
-        elif forward_to == number:
-            logger.info(f"Do not forward message from {number} (it is the same number as 'default' entry)")
         else:
+            msg_id = msg.get('id')
             msg_orig = msg.get('content')
-            send_sms(forward_to, f"[{msg_id}] FROM: {number}\n{msg_orig}")
+            send_sms(forward_to, f"[{msg_id}] FROM: {sender}\n{msg_orig}")
+
+
+def check_inbox(parser):
+    login()
+    register_sms_commands()
+    m1 = check_received_sms(sys.argv[2] if len(sys.argv) == 3 else None, mem_store=0)
+    m2 = check_received_sms(sys.argv[2] if len(sys.argv) == 3 else None, mem_store=1)
+    m1.update(m2)
+    for _id, msg in sorted(m1.items(), key=lambda t: t[1].get('date')):
+        logger.debug(msg)
+        number = to_name(msg.get('number'))
+        content = msg.get('content')
+        date = msg.get('date')
+        tag = msg.get('tag')
+
+        state = {Tag.READ: ' -> ', Tag.UNREAD: ' => ', Tag.SENT: ' <- '}.get(str(tag), '???')
+        style = term.YELLOW if tag in [Tag.READ, Tag.UNREAD] else term.NORMAL
+        bright = term.BRIGHT if tag == Tag.UNREAD in state else ''
+        print(f'%5s %-12s %4s %s {style}{bright}%r{term.RESET_ALL}' % (msg.get('id'), date, number, state, content))
+
+        if tag == '1' and not parser.keep_unread:
+            try:
+                handle_received_message(msg)
+                set_sms_read(msg.get('id'))
+            except Exception as e:
+                logger.exception(f"Handle message error: {e}")
+
+        if parser.delete_all:
+            delete_sms(msg.get('id'))
 
 
 def execute_request(parser):
     if parser.check or parser.all or parser.keep_unread:
-        login()
-        m1 = check_received_sms(sys.argv[2] if len(sys.argv) == 3 else None, mem_store=0)
-        m2 = check_received_sms(sys.argv[2] if len(sys.argv) == 3 else None, mem_store=1)
-        m1.update(m2)
-        for _id, msg in sorted(m1.items(), key=lambda t: t[1].get('date')):
-            logger.debug(msg)
-            number = to_name(msg.get('number'))
-            content = msg.get('content')
-            date = msg.get('date')
-            tag = msg.get('tag')
-
-            state = {Tag.READ: ' -> ', Tag.UNREAD: ' => ', Tag.SENT: ' <- '}.get(str(tag), '???')
-            style = term.YELLOW if tag in [Tag.READ, Tag.UNREAD] else term.NORMAL
-            bright = term.BRIGHT if tag == Tag.UNREAD in state else ''
-            print(f'%5s %-12s %4s %s {style}{bright}%r{term.RESET_ALL}' % (msg.get('id'), date, number, state, content))
-
-            if tag == '1' and not parser.keep_unread:
-                try:
-                    handle_received_message(msg)
-                    set_sms_read(msg.get('id'))
-                except Exception as e:
-                    logger.exception(f"Handle message error: {e}")
-
-            if parser.delete_all:
-                delete_sms(msg.get('id'))
+        check_inbox(parser)
 
     if parser.send:
         receiver = parser.send[0]
@@ -164,10 +164,8 @@ def main():
         repeat_num -= 1
         if repeat_num == 0:
             break
-        sys.stdout.write("sleeping...")
-        sys.stdout.flush()
+        logger.debug("sleeping...")
         time.sleep(parser.interval)
-        sys.stdout.write("\n")
 
 
 
