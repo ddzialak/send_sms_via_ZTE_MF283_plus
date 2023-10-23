@@ -20,7 +20,7 @@ fi
 echo "Deploy service on $TO_HOST in directory $TO_DIR"
 
 echo "Send files to $TO_HOST"
-rsync -va --exclude .idea --exclude .git --exclude __pycache__  ./ $TO_HOST:$TO_DIR
+rsync -va --exclude .idea --exclude .git --exclude __pycache__  --delete ./ $TO_HOST:$TO_DIR
 
 echo "Setup systemd"
 ssh $TO_HOST bash "$TO_DIR/setup_systemd.sh"

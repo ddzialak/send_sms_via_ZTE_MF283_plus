@@ -168,10 +168,8 @@ def main():
         time.sleep(parser.interval)
 
 
-
 if __name__ == "__main__":
     try:
        main()
     except KeyboardInterrupt:
         print("Bye!")
-

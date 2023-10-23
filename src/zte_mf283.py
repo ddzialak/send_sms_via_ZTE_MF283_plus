@@ -62,7 +62,7 @@ def send_sms(number, body, check_response=True, allow_split=True):
             part = 320
             sms1 = f"{body[:part]}(..)"
             send_sms(number, sms1, check_response=check_response, allow_split=False)
-            time.sleep(2)
+            time.sleep(3)  # wait before sending another SMS
             sms2 = '(..)' + (body[part:])[:-part]
             return send_sms(number, sms2, check_response=check_response, allow_split=False)
         else:
@@ -92,6 +92,7 @@ def send_sms(number, body, check_response=True, allow_split=True):
     logger.info(result)
     if check_response and result.get('result').lower() != 'success':
         raise ValueError("Sending message failed: {result}")
+    return result
 
 
 def check_received_sms(ts=None, mem_store=1):
