@@ -7,6 +7,11 @@ cd $(dirname $0)
 TO_HOST=${1:-}
 TO_DIR=${2:-zte-mf283-service}
 
+if [[ -d "$BACKUP_WORKSPACE_DIR" ]]; then
+	echo "Make workspace backup..."
+	rsync -va --exclude __pycache__ --backup --suffix=.pre ./  "${BACKUP_WORKSPACE_DIR}/$(basename "$PWD")"
+fi
+
 if [[ "B#M@$TO_HOST" =~ "B#M@-" ]]; then
 	echo "Usage: $0 DESTINATION_HOST"
 	exit 1

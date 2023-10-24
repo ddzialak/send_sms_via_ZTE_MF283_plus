@@ -1,8 +1,11 @@
 import configparser
+import functools
 import logging
 import os
+import shlex
 import subprocess
 import sys
+from typing import Callable
 
 import requests
 
@@ -51,9 +54,9 @@ def load_config(filename='mf283.ini', without=None, config=None) -> configparser
     return config
 
 
-def exec_cmd(cmd, timeout=10):
+def exec_cmd(cmd, *args, timeout=10):
     try:
-        completed_proc = subprocess.run(cmd, shell=True, timeout=timeout, capture_output=True)
+        completed_proc = subprocess.run(cmd + ' ' + shlex.join(args), shell=True, timeout=timeout, capture_output=True)
         result = []
         if completed_proc.stderr:
             result.append(completed_proc.stderr.strip().decode())
@@ -66,8 +69,20 @@ def exec_cmd(cmd, timeout=10):
         return f"cmd error: {ex}"
 
 
-def get_callback(fn, *args, **kwargs):
-    return lambda: fn(*args, **kwargs)
+def get_callback(fn, *args, with_args=False, **fn_kwargs) -> Callable[..., str]:
+
+    @functools.wraps(fn)
+    def callback(*input_args):
+        run_with_args = list(args)
+        result = []
+        if with_args:
+            run_with_args.extend(input_args)
+        elif input_args:
+            result.append('Please avoid args, this command ignores them.')
+        result.append(str(fn(*run_with_args, **fn_kwargs)))
+        return '\n'.join(result)
+
+    return callback
 
 
 def load_cmds(config: configparser.ConfigParser):
@@ -77,12 +92,11 @@ def load_cmds(config: configparser.ConfigParser):
             continue
         key = section[len(cmd_prefix):].strip()
         cmd = config.get(section, 'exec', fallback='').strip()
+        with_args = config.getboolean(section, 'with_args', fallback=False)
         if key and cmd:
             alias = config.get(section, 'alias', fallback='').strip()
             timeout = config.getint(section, 'timeout', fallback=10)
-
-            callback = get_callback(exec_cmd, cmd,  timeout=timeout)
-
+            callback = get_callback(exec_cmd, cmd, timeout=timeout, with_args=with_args)
             logger.debug(f"Register cmd {key} {alias=} => {cmd}")
             sms_cmds[key] = callback
             if alias:

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
-import functools
 import json
 import logging
 import sys
 import time
 
 import term
+from utils import get_callback
 from utils import known_numbers, to_name, to_number, is_phone_number
 from utils import setup_cli, sms_cmds
 from zte_mf283 import Tag
@@ -41,32 +41,37 @@ def parse_args(args):
 STATUS_KEYS = {'signalbar', 'network_type', 'sms_unread_num', 'simcard_roam', 'network_provider', 'ppp_status'}
 
 
-def get_status_wrap():
-    logger.info("get status")
+def get_status_wrap(*args):
+    logger.info("get status %s", args)
     json_out = {k: v for (k, v) in get_status().items() if k in STATUS_KEYS}
     return json.dumps(json_out, sort_keys=True, indent=2)
 
 
 def register_sms_commands():
-    sms_cmds['connect'] = lambda: set_net_state(True)
-    sms_cmds['disconnect'] = lambda: set_net_state(False)
-    sms_cmds['dhcpon'] = enable_dhcp_server
-    sms_cmds['dhcpoff'] = disable_dhcp_server
-    sms_cmds['getstatus'] = get_status_wrap
-    sms_cmds['status'] = get_status_wrap
-    sms_cmds['checkstatus'] = get_status_wrap
+    sms_cmds['connect'] = get_callback(set_net_state, True, with_args=False)
+    sms_cmds['disconnect'] = get_callback(set_net_state, False, with_args=False)
+    sms_cmds['dhcpon!'] = get_callback(enable_dhcp_server)
+    sms_cmds['dhcpoff!'] = get_callback(disable_dhcp_server)
+
+    check_status_fn = get_callback(get_status_wrap)
+    sms_cmds['getstatus'] = check_status_fn
+    sms_cmds['status'] = check_status_fn
+    sms_cmds['checkstatus'] = check_status_fn
 
 
-def exec_request_and_reply(sender, msg, content, forward_to):
-    for line in content.splitlines():
-        line = line.strip()
-        if line in sms_cmds:
+def exec_request_and_reply(sender, msg):
+    lines = msg.get('content').lower().replace('-', '').replace('_', ' ').splitlines()
+    for line in lines:
+        parts = line.strip().split()
+        cmd = parts[0]
+        args = parts[1:]
+        if cmd in sms_cmds:
             try:
-                callback = sms_cmds.get(line)
-                result = callback()
+                callback = sms_cmds.get(cmd)
+                result = callback(*args)
             except Exception as ex:
                 result = f'ERR: {ex}'
-            send_sms(sender, f"[{line}]\n{result}")
+            send_sms(sender, f"[{cmd}]\n{result}")
         else:
             keys_str = ', '.join(sms_cmds.keys())
             send_sms(sender, f"Unrecognized: {line}, defined: {keys_str}")
@@ -80,10 +85,9 @@ def handle_received_message(msg):
     if sender not in known_numbers:
         return
 
-    content = msg.get('content').lower().replace('-', ' ').replace('_', ' ').strip()
     forward_to = to_number('default')
     if forward_to == sender:
-        exec_request_and_reply(sender, msg, content, forward_to)
+        exec_request_and_reply(sender, msg)
     else:
         if not forward_to:
             logger.info("Do not forward message as recipient ('default' entry in numbers.txt) is not defined")
