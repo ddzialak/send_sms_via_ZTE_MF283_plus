@@ -63,6 +63,8 @@ def exec_request_and_reply(sender, msg):
     lines = msg.get('content').lower().replace('-', '').replace('_', ' ').splitlines()
     for line in lines:
         parts = line.strip().split()
+        if not parts:
+            continue
         cmd = parts[0]
         args = parts[1:]
         if cmd in sms_cmds:

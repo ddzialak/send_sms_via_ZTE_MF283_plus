@@ -20,8 +20,8 @@ the last one number is used.
 111222333: aunt
 111222333: Janny
 
-# default is a special definition that receive all other SMS-es
-# but to make it working "sms --check" must be invoked.
+# "default" is a special definition that receive all other SMS-es
+# but to make it working "zte-cli --check" must be invoked.
 123444567: default
 ```
 
@@ -29,8 +29,9 @@ the last one number is used.
 
 `./sendsms.sh <receiver> "text to be sent"`
 
-`./sms --check`
+`./zte-cli --check`
 
-`./sms --check --delete-all`
+`./zte-cli --check --delete-all`
 
-`./sms --rmid <message-id>`
+`./zte-cli --rmid <message-id>`
+

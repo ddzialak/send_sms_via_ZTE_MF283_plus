@@ -7,11 +7,11 @@ StartLimitIntervalSec=10
 [Service]
 Type=simple
 Restart=always
-RestartSec=1
+RestartSec=5
 #User=serviceuser
-ExecStartPre=
-ExecStart=$PWD/src/zte-cli.py --check --repeat 8640 --interval 5 --delete
 WorkingDirectory=$PWD
+#ExecStartPre=
+ExecStart=$PWD/src/zte-cli.py --check --repeat 8640 --interval 5 --delete
 
 #ExecStartPost
 #ExecStop=
