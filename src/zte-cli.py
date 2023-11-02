@@ -60,12 +60,12 @@ def register_sms_commands():
 
 
 def exec_request_and_reply(sender, msg):
-    lines = msg.get('content').lower().replace('-', '').replace('_', ' ').splitlines()
+    lines = msg.get('content').splitlines()
     for line in lines:
-        parts = line.strip().split()
+        parts = line.split()
         if not parts:
             continue
-        cmd = parts[0]
+        cmd = parts[0].lower()
         args = parts[1:]
         if cmd in sms_cmds:
             try:
